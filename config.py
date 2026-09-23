@@ -29,7 +29,7 @@ class Settings:
 
     # ── حجم نموذج Whisper المحلي ────────────────────────────────
     whisper_model_size: str = field(
-        default_factory=lambda: os.getenv("WHISPER_MODEL_SIZE", "small")
+        default_factory=lambda: os.getenv("WHISPER_MODEL_SIZE", "tiny")
     )
 
     # ── محرك OCR الافتراضي ──────────────────────────────────────
