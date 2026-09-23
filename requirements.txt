@@ -1,6 +1,6 @@
 python-telegram-bot>=20.0
 openai
-chromadb
+chromadb==0.3.29
 sentence-transformers
 pytesseract
 easyocr
