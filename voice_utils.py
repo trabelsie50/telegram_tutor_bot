@@ -35,7 +35,7 @@ WHISPER_LANGUAGES = {
     "en": "الإنجليزية",
 }
 
-DEFAULT_WHISPER_MODEL_SIZE = "small"
+DEFAULT_WHISPER_MODEL_SIZE = "tiny"
 DEFAULT_LANGUAGE = "ar"
 AUDIO_PREFIXES = ("voice_", "tts_", "converted_", "msg_")
 
