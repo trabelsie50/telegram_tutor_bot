@@ -138,12 +138,9 @@ class RAGEngine:
             temperature=0.4,
         )
 
+                # تهيئة عميل ChromaDB بالطريقة الحديثة
         self.chroma_client: chromadb.Client = chromadb.PersistentClient(
-            path=self.persist_directory,
-            settings=ChromaClientSettings(
-                chroma_db_impl="duckdb+parquet",
-                persist_directory=self.persist_directory,
-            ),
+            path=self.persist_directory
         )
 
         try:
