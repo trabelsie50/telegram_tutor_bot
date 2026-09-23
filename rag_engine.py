@@ -122,19 +122,7 @@ def initialize_chroma(
     persist_directory: Optional[str] = None,
     embedding_model_name: Optional[str] = None,
     collection_name: str = DEFAULT_COLLECTION_NAME,
-) -> "RAGEngine":
-    """تهيئة ChromaDB وإرجاع محرك RAG جاهز للاستخدام.
-
-    Args:
-        persist_directory: مسار تخزين ChromaDB الدائم. إذا لم يُحدَّد،
-            يُؤخذ من ``settings.chroma_persist_directory()``.
-        embedding_model_name: اسم نموذج التضمين المحلي. إذا لم يُحدَّد،
-            يُستخدم ``paraphrase-multilingual-MiniLM-L12-v2``.
-        collection_name: اسم مجموعة ChromaDB.
-
-    Returns:
-        مثيل ``RAGEngine`` مُهيَّأ بالكامل.
-    """
+) -> RAGEngine:
     settings = get_settings()
     if persist_directory is None:
         persist_directory = settings.chroma_persist_directory
@@ -144,7 +132,7 @@ def initialize_chroma(
     engine = RAGEngine(
         persist_directory=persist_directory,
         embedding_model_name=embedding_model_name,
-        collection_name=collection_name,
+        collection_name=collection_name
     )
     logger.info(
         "ChromaDB initialized: persist_dir=%s, collection=%s",
@@ -152,6 +140,7 @@ def initialize_chroma(
         collection_name,
     )
     return engine
+
 
 
 def add_document(
