@@ -1,0 +1,10 @@
+chromadb
+easyocr
+gtts
+numpy
+pillow
+pytesseract
+python-dotenv
+sentence_transformers
+telegram
+whisper
