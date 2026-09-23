@@ -210,10 +210,7 @@ def retrieve_relevant(
 # ── الصنف الرئيسي ─────────────────────────────────────────────────────────
 
 class RAGEngine:
-    """محرك RAG: إدارة ChromaDB مع نموذج التضمين المحلي.
-
-    يضمن أن جميع الإجابات المبنية على استرجاع المعلومات تأتي فقط من
-    المحتوى المخزن فعلياً في قاعدة ChromaDB (المنهج التونسي CNP).
+    """محرك RAG: إدارة ChromaDB مع نموذج التضمين المحلي (مع تفعيل التحميل عند الطلب).
 
     Args:
         persist_directory: مسار تخزين ChromaDB الدائم.
@@ -240,15 +237,14 @@ class RAGEngine:
         self.chunk_overlap: int = chunk_overlap
         self.top_k: int = top_k
 
+        # متغير داخلي لتخزين النموذج مؤقتاً عند تحميله لأول مرة
+        self._embedding_model: Optional[SentenceTransformer] = None
+
         # التأكد من وجود دليل التخزين
         os.makedirs(self.persist_directory, exist_ok=True)
 
-        # تهيئة نموذج التضمين المحلي (يعمل بدون إنترنت)
-        logger.info("Loading local embedding model: %s ...", self.embedding_model_name)
-        self.embedding_model: SentenceTransformer = SentenceTransformer(
-            self.embedding_model_name
-        )
-        logger.info("Local embedding model loaded successfully.")
+        # 🛑 تم حذف التحميل الفوري من هنا لتوفير الـ RAM عند الإقلاع
+        # سيتم تحميل نموذج التضمين المحلي فقط عند أول طلب عبر الخاصية embedding_model
 
         # تهيئة نموذج اللغة (LLM) عبر OpenAI لتوليد الإجابات والاختبارات
         _settings = get_settings()
@@ -284,7 +280,16 @@ class RAGEngine:
                 "Created new ChromaDB collection: %s", self.collection_name
             )
 
-        logger.info("RAGEngine initialized successfully.")
+        logger.info("RAGEngine initialized successfully (Lazy Loading enabled).")
+
+    @property
+    def embedding_model(self) -> SentenceTransformer:
+        """خاصية ذكية تقوم بتحميل نموذج التضمين محلياً فقط عند استخدامه لأول مرة (Lazy Loading)."""
+        if self._embedding_model is None:
+            logger.info("Loading local embedding model: %s (on demand)...", self.embedding_model_name)
+            self._embedding_model = SentenceTransformer(self.embedding_model_name)
+            logger.info("Local embedding model loaded successfully.")
+        return self._embedding_model
 
     # ── إضافة المستندات ──────────────────────────────────────────────────
 
@@ -342,7 +347,7 @@ class RAGEngine:
             chunk_metadata["chunk_index"] = i
             chunk_metadata["chunk_char_length"] = len(chunk)
 
-            # توليد التضمين باستخدام النموذج المحلي
+            # توليد التضمين باستخدام النموذج المحلي (سيتم تحفيز التحميل هنا تلقائياً عند أول استدعاء لـ self.embedding_model)
             embedding: List[float] = self.embedding_model.encode(
                 chunk, normalize_embeddings=True
             ).tolist()
@@ -439,9 +444,13 @@ class RAGEngine:
             if lesson_filter:
                 where_filter["lesson_name"] = lesson_filter
 
-        # تنفيذ الاستعلام
+        # ملاحظة: إذا قمت بالبحث، سيتم استدعاء self.embedding_model ضمناً لتوليد متجه السؤال
+        # (يمكنك أيضاً استخدام استعلام نصي مباشر عبر chroma إذا أردت، لكننا سنحافظ على طريقة التضمين المحلية لتوافق النماذج)
+        query_embedding = self.embedding_model.encode(query, normalize_embeddings=True).tolist()
+
+        # تنفيذ الاستعلام بالمتجه المولد
         results = self.collection.query(
-            query_texts=[query],
+            query_embeddings=[query_embedding],
             n_results=k,
             where=where_filter,
         )
@@ -482,26 +491,13 @@ class RAGEngine:
         subject: str,
         top_k: Optional[int] = None,
     ) -> str:
-        """استرجاع النص الكامل لدرس معين لاستخدامه في توليد الاختبار.
-
-        يجمع كل القطع المتعلقة بدرس معين في نص متصل، لاستخدامه كمرجع
-        مباشر في ``QUIZ_PROMPT_TEMPLATE``.
-
-        Args:
-            lesson_name: اسم الدرس بالضبط.
-            subject: المادة.
-            top_k: الحد الأقصى لعدد القطع المراد استرجاعها.
-
-        Returns:
-            النص المجمع للدرس (فارغ إذا لم يُوجد).
-        """
+        """استرجاع النص الكامل لدرس معين لاستخدامه في توليد الاختبار."""
         results = self.retrieve_relevant(
             query=lesson_name,
             top_k=top_k,
             subject_filter=subject,
             lesson_filter=lesson_name,
         )
-        # ترتيب القطع حسب الفهرس إن وُجد
         results.sort(key=lambda chunk: chunk.get("metadata", {}).get("chunk_index", 0))
         if top_k:
             results = results[:top_k]
@@ -516,17 +512,7 @@ class RAGEngine:
         lesson_name: Optional[str] = None,
         top_k: Optional[int] = None,
     ) -> str:
-        """توليد إجابة على سؤال باستخدام السياق المسترجع.
-
-        Args:
-            question: السؤال المراد الإجابة عنه.
-            subject: المادة.
-            lesson_name: اسم الدرس (اختياري لتضييق النطاق).
-            top_k: الحد الأقصى لعدد القطع المرجعية.
-
-        Returns:
-            الإجابة المولَّدة كنص.
-        """
+        """توليد إجابة على سؤال باستخدام السياق المسترجع."""
         context_chunks = self.retrieve_relevant(
             query=question,
             top_k=top_k,
@@ -556,16 +542,7 @@ class RAGEngine:
         subject: str,
         top_k: Optional[int] = None,
     ) -> str:
-        """شرح درس كامل للتلميذ بالاستناد إلى نصه المخزَّن في المنهج فقط.
-
-        Args:
-            lesson_name: اسم الدرس أو السؤال الذي كتبه التلميذ.
-            subject: المادة الحالية.
-            top_k: الحد الأقصى لعدد القطع المرجعية.
-
-        Returns:
-            الشرح المولَّد كنص (أو رسالة توضيحية إذا لم يُوجد محتوى).
-        """
+        """شرح درس كامل للتلميذ بالاستناد إلى نصه المخزَّن في المنهج فقط."""
         reference_text = self.retrieve_for_quiz(
             lesson_name=lesson_name,
             subject=subject,
@@ -590,21 +567,7 @@ class RAGEngine:
         num_questions: int = 3,
         difficulty: str = "medium",
     ) -> List[Dict[str, str]]:
-        """توليد اختبار من محتوى درس معين.
-
-        يسترجع النص الكامل للدرس ثم يمرره لنموذج اللغة
-        مع قالب ``QUIZ_PROMPT_TEMPLATE``.
-
-        Args:
-            lesson_name: اسم الدرس بالضبط.
-            subject: المادة.
-            num_questions: عدد الأسئلة المطلوبة.
-            difficulty: مستوى الصعوبة ("easy", "medium", "hard").
-
-        Returns:
-            قائمة من القواميس، كل منها يحتوي على:
-            "question", "options", "correct_answer".
-        """
+        """توليد اختبار من محتوى درس معين."""
         reference_text = self.retrieve_for_quiz(
             lesson_name=lesson_name,
             subject=subject,
@@ -629,17 +592,7 @@ class RAGEngine:
     def _parse_quiz_response(
         self, raw_text: str
     ) -> List[Dict[str, str]]:
-        """تحليل نص الاستجابة إلى قائمة أسئلة منظمة.
-
-        يحاول استخراج JSON صالح من النص، ويعيد قائمة من القواميس
-        بصيغة {"question", "options", "correct_answer"}.
-
-        Args:
-            raw_text: النص الخام من نموذج اللغة.
-
-        Returns:
-            قائمة الأسئلة المُحلَّلة (فارغة عند الفشل).
-        """
+        """تحليل نص الاستجابة إلى قائمة أسئلة منظمة."""
         import json
         import re
 
@@ -675,25 +628,12 @@ class RAGEngine:
     def _format_prompt(
         self,
         prompt_template: str,
-        context: str = "",
-        question: str = "",
-        subject: str = "",
+        context: str,
+        question: str,
+        subject: str,
         **kwargs,
     ) -> str:
-        """إدراج القيم في قالب التلميح (prompt template).
-
-        يستبدل المفاتيح الموضعية ``{key}`` بالقيم المقابلة.
-
-        Args:
-            prompt_template: النص الذي يحتوي على حيزات ``{key}``.
-            context: السياق المسترجع من قاعدة المعرفة.
-            question: السؤال الأصلي.
-            subject: المادة.
-            **kwargs: أزواج إضافية للمستبدلات.
-
-        Returns:
-            التلميح بعد إدراج جميع القيم.
-        """
+        """إدراج القيم في قالب التلميح (prompt template)."""
         replacements = {
             "context": context,
             "question": question,
@@ -759,7 +699,7 @@ def main():
     )
     args = parser.parse_args()
 
-    engine = RAGEngine()
+    engine = RAGEngine(persist_directory="./chroma_db")
 
     if args.mode == "answer":
         if not args.question:
