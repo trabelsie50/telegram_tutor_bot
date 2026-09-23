@@ -137,7 +137,7 @@ def initialize_chroma(
     """
     settings = get_settings()
     if persist_directory is None:
-        persist_directory = settings.chroma_persist_directory()
+        persist_directory = settings.chroma_persist_directory
     if embedding_model_name is None:
         embedding_model_name = DEFAULT_EMBEDDING_MODEL
 
