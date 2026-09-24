@@ -1,0 +1,14 @@
+python-telegram-bot>=20.0
+openai
+chromadb
+sentence-transformers
+pytesseract
+openai-whisper
+gTTS
+Pillow
+langchain
+langchain-openai
+python-dotenv
+pypdf
+python-docx
+pdf2image
