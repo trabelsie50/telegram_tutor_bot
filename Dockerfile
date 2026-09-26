@@ -2,12 +2,12 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# تثبيت الأدوات الأساسية والنظامية
+# تثبيت الأدوات الأساسية والنظامية بالتسمية الصحيحة الحديثة
 RUN apt-get update && apt-get install -y \
     build-essential \
     tesseract-ocr \
     ffmpeg \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
