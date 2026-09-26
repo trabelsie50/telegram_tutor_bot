@@ -9,3 +9,4 @@ python-dotenv
 pypdf
 python-docx
 pdf2image
+numpy<2.0
