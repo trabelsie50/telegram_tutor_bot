@@ -1,0 +1,11 @@
+python-telegram-bot>=20.0
+google-generativeai
+chromadb
+pytesseract
+openai-whisper
+gTTS
+Pillow
+python-dotenv
+pypdf
+python-docx
+pdf2image
